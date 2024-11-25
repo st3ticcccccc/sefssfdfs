@@ -1,0 +1,185 @@
+local win = lib:Window("W Menu's | Exploits | V2", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
+
+local tab = win:Tab("Main")
+
+local ESPEnabled = false
+local AimLockEnabled = false
+local targetPlayer = nil
+local HighlightColor = Color3.fromRGB(255, 0, 0) -- Default highlight color (red)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local highlights = {} -- Dictionary to store highlight effects for each player
+
+-- ESP Functions
+
+local function createHighlight(player)
+    local character = player.Character
+    if character and player ~= LocalPlayer then
+        local highlight = highlights[player]
+        
+        if not highlight or not highlight.Parent then
+            highlight = Instance.new("Highlight")
+            highlight.Name = "PlayerHighlight"
+            highlight.Adornee = character
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.OutlineColor = HighlightColor
+            highlight.OutlineTransparency = 0.5
+            highlight.FillTransparency = 1
+            highlight.Parent = character
+
+            highlights[player] = highlight
+        else
+            -- Update the Adornee to the new character model after respawn
+            highlight.Adornee = character
+        end
+    end
+end
+
+local function highlightPlayer(player)
+    createHighlight(player)
+end
+
+local function highlightAllPlayers()
+    for _, player in ipairs(Players:GetPlayers()) do
+        highlightPlayer(player)
+    end
+end
+
+-- When a player is added, connect their CharacterAdded event to reapply highlights
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        if ESPEnabled then
+            wait(1) -- Wait for character to load
+            createHighlight(player)
+        end
+    end)
+end)
+
+-- Reapply highlights to all existing players upon their respawn
+for _, player in ipairs(Players:GetPlayers()) do
+    player.CharacterAdded:Connect(function(character)
+        if ESPEnabled then
+            wait(1) -- Wait for character to load
+            createHighlight(player)
+        end
+    end)
+end
+
+
+local function lockMouseToPlayerHead(player)
+    targetPlayer = player
+    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+end
+
+local function unlockMouse()
+    targetPlayer = nil
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+end
+
+local function findNearestPlayerHead(mousePosition)
+    local nearestPlayer = nil
+    local minDistance = math.huge
+    local camera = workspace.CurrentCamera
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local character = player.Character
+            local head = character:FindFirstChild("Head")
+
+            if head then
+                local headPosition = head.Position
+                local headScreenPosition = camera:WorldToViewportPoint(headPosition)
+
+                if headScreenPosition.Z > 0 then
+                    local distance = (Vector2.new(headScreenPosition.X, headScreenPosition.Y) - mousePosition).magnitude
+
+                    if distance < minDistance then
+                        minDistance = distance
+                        nearestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+
+    return nearestPlayer
+end
+
+local function updateCamera()
+    if AimLockEnabled and targetPlayer then
+        local character = targetPlayer.Character
+        if character and character:FindFirstChild("Head") then
+            local head = character.Head
+            if head then
+                local camera = workspace.CurrentCamera
+                local currentCameraCFrame = camera.CFrame
+                local newCameraCFrame = CFrame.new(currentCameraCFrame.Position, head.Position)
+                camera.CFrame = newCameraCFrame
+            else
+                unlockMouse()
+            end
+        end
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.G then
+        if AimLockEnabled then
+            if not targetPlayer then
+                local mouse = LocalPlayer:GetMouse()
+                local mousePosition = Vector2.new(mouse.X, mouse.Y)
+                local nearestPlayer = findNearestPlayerHead(mousePosition)
+                if nearestPlayer then
+                    lockMouseToPlayerHead(nearestPlayer)
+                end
+            else
+                unlockMouse()
+            end
+        end
+    end
+end)
+
+game:GetService("RunService").RenderStepped:Connect(updateCamera)
+
+-- GUI
+local colorPicker = tab:Colorpicker("Highlight Color", HighlightColor, function(color)
+    HighlightColor = color
+    for player, highlight in pairs(highlights) do
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    highlights = {}
+    if ESPEnabled then
+        highlightAllPlayers()
+    end
+end)
+
+tab:Toggle("ESP", false, function(t)
+    ESPEnabled = t
+    if not t then
+        for player, highlight in pairs(highlights) do
+            if highlight then
+                highlight:Destroy()
+            end
+        end
+        highlights = {}
+    else
+        highlightAllPlayers()
+    end
+end)
+
+tab:Toggle("Aim Lock", false, function(t)
+lib:Notification("Notificatie", "Klik G Om te Locken!", "BEGREPEN!")
+    AimLockEnabled = t
+    if not t then
+        unlockMouse()
+    end
+end)
+
+tab:Label("Made By st3ticc.gg")
+tab:Label("W Menu's | Exploits | V2")
+end)
